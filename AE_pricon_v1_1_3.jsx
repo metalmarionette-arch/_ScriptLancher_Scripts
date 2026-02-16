@@ -9,6 +9,7 @@
    ===================================================================== */
 
 (function (thisObj) {
+    var GLOBAL_KEY = "__AE_pricon_v1_1_3_UI__";
 
     // -------------------------------
     // Utils
@@ -442,8 +443,22 @@
         return win;
     }
 
+    if (!(thisObj instanceof Panel)) {
+        if (!($.global[GLOBAL_KEY] === undefined || $.global[GLOBAL_KEY] === null)) {
+            try {
+                $.global[GLOBAL_KEY].show();
+                $.global[GLOBAL_KEY].active = true;
+            } catch (_reuseErr) {}
+            return;
+        }
+    }
+
     var ui = buildUI(thisObj);
     if (ui instanceof Window) {
+        $.global[GLOBAL_KEY] = ui;
+        ui.onClose = function () {
+            try { $.global[GLOBAL_KEY] = null; } catch (_closeErr) {}
+        };
         ui.center();
         ui.show();
     } else {

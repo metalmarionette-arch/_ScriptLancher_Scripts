@@ -31,10 +31,28 @@
 
 (function MarkerUtilityPanel(thisObj) {
     var SCRIPT_NAME = "Marker Utility";
+    var GLOBAL_KEY = "__AE_MarkerUtility_v01_08_UI__";
+
+    if (!(thisObj instanceof Panel)) {
+        if (!($.global[GLOBAL_KEY] === undefined || $.global[GLOBAL_KEY] === null)) {
+            try {
+                $.global[GLOBAL_KEY].show();
+                $.global[GLOBAL_KEY].active = true;
+            } catch (_reuseErr) {}
+            return;
+        }
+    }
 
     /* -------------------------------------------------- UI */
     var win = (thisObj instanceof Panel) ? thisObj : new Window("palette", SCRIPT_NAME, undefined, {resizeable:true});
     if (!win) return;
+
+    if (win instanceof Window) {
+        $.global[GLOBAL_KEY] = win;
+        win.onClose = function () {
+            try { $.global[GLOBAL_KEY] = null; } catch (_closeErr) {}
+        };
+    }
 
     win.orientation = "column";
     win.alignChildren = ["fill", "top"];
@@ -84,7 +102,7 @@
 
     // スペース
     grpArrows.add("statictext", undefined, "   ");
-    
+
     // ↷↷ /コピー/
     var btnRightRightCopy = grpArrows.add("button", undefined, "↷↷");
     btnRightRightCopy.size = [30, 20];
@@ -145,60 +163,69 @@
         return (c instanceof CompItem) ? c : null;
     }
 
+    function runWithUndo(label, fn) {
+        app.beginUndoGroup(label);
+        try {
+            fn();
+        } finally {
+            app.endUndoGroup();
+        }
+    }
+
     function copyLayerMarkersToComp(isMove) {
         var comp = getActiveComp(); if (!comp) { alertNoActiveComp(); return; }
         var layers = comp.selectedLayers; if (!layers || layers.length === 0) { alert("レイヤーが選択されていません"); return; }
-        app.beginUndoGroup("Layer→Comp Markers" + (isMove ? " (Move)":""));
-        for (var i = 0; i < layers.length; i++) {
-            var l = layers[i]; var src = l.property("Marker"); var dst = comp.markerProperty;
-            for (var k = 1; k <= src.numKeys; k++) { dst.setValueAtTime(src.keyTime(k), src.keyValue(k)); }
-            if (isMove) { for (k = src.numKeys; k >= 1; k--) src.removeKey(k); }
-        }
-        app.endUndoGroup();
+        runWithUndo("Layer→Comp Markers" + (isMove ? " (Move)":""), function () {
+            for (var i = 0; i < layers.length; i++) {
+                var l = layers[i]; var src = l.property("Marker"); var dst = comp.markerProperty;
+                for (var k = 1; k <= src.numKeys; k++) { dst.setValueAtTime(src.keyTime(k), src.keyValue(k)); }
+                if (isMove) { for (k = src.numKeys; k >= 1; k--) src.removeKey(k); }
+            }
+        });
     }
 
     function copyCompMarkersToLayer(isMove) {
         var comp = getActiveComp(); if (!comp) { alertNoActiveComp(); return; }
         var layers = comp.selectedLayers; if (!layers || layers.length === 0) { alert("レイヤーが選択されていません"); return; }
         var src = comp.markerProperty; if (src.numKeys === 0) { alert("アクティブコンポにマーカーがありません"); return; }
-        app.beginUndoGroup("Comp→Layer Markers" + (isMove ? " (Move)":""));
-        for (var i = 0; i < layers.length; i++) {
-            var l = layers[i]; var dst = l.property("Marker");
-            for (var k = 1; k <= src.numKeys; k++) {
-                var t = src.keyTime(k); if (t < l.inPoint || t > l.outPoint) continue; dst.setValueAtTime(t, src.keyValue(k));
+        runWithUndo("Comp→Layer Markers" + (isMove ? " (Move)":""), function () {
+            for (var i = 0; i < layers.length; i++) {
+                var l = layers[i]; var dst = l.property("Marker");
+                for (var k = 1; k <= src.numKeys; k++) {
+                    var t = src.keyTime(k); if (t < l.inPoint || t > l.outPoint) continue; dst.setValueAtTime(t, src.keyValue(k));
+                }
             }
-        }
-        if (isMove) { for (var k = src.numKeys; k >= 1; k--) src.removeKey(k); }
-        app.endUndoGroup();
+            if (isMove) { for (var k = src.numKeys; k >= 1; k--) src.removeKey(k); }
+        });
     }
 
     function copyNestedCompToLayer(isMove) {
         var comp = getActiveComp(); if (!comp) { alertNoActiveComp(); return; }
         var layers = comp.selectedLayers; if (!layers || layers.length === 0) { alert("レイヤーが選択されていません"); return; }
-        app.beginUndoGroup("NestedComp→Layer Markers" + (isMove ? " (Move)":""));
-        for (var i = 0; i < layers.length; i++) {
-            var l = layers[i]; if (!(l instanceof AVLayer) || !(l.source instanceof CompItem)) continue;
-            var nested = l.source.markerProperty; if (nested.numKeys === 0) continue;
-            var dst = l.property("Marker"); var stretch = l.stretch / 100.0; var offset = l.startTime;
-            for (var k = 1; k <= nested.numKeys; k++) {
-                var tSrc = nested.keyTime(k); var tDst = offset + tSrc * stretch; if (tDst < l.inPoint || tDst > l.outPoint) continue; dst.setValueAtTime(tDst, nested.keyValue(k));
+        runWithUndo("NestedComp→Layer Markers" + (isMove ? " (Move)":""), function () {
+            for (var i = 0; i < layers.length; i++) {
+                var l = layers[i]; if (!(l instanceof AVLayer) || !(l.source instanceof CompItem)) continue;
+                var nested = l.source.markerProperty; if (nested.numKeys === 0) continue;
+                var dst = l.property("Marker"); var stretch = l.stretch / 100.0; var offset = l.startTime;
+                for (var k = 1; k <= nested.numKeys; k++) {
+                    var tSrc = nested.keyTime(k); var tDst = offset + tSrc * stretch; if (tDst < l.inPoint || tDst > l.outPoint) continue; dst.setValueAtTime(tDst, nested.keyValue(k));
+                }
+                if (isMove) { for (var m = nested.numKeys; m >= 1; m--) nested.removeKey(m); }
             }
-            if (isMove) { for (var m = nested.numKeys; m >= 1; m--) nested.removeKey(m); }
-        }
-        app.endUndoGroup();
+        });
     }
 
     function copyLayerMarkersToNestedComp(isMove) {
         var comp = getActiveComp(); if (!comp) { alertNoActiveComp(); return; }
         var layers = comp.selectedLayers; if (!layers || layers.length === 0) { alert("レイヤーが選択されていません"); return; }
-        app.beginUndoGroup("Layer→NestedComp Markers" + (isMove ? " (Move)":""));
-        for (var i = 0; i < layers.length; i++) {
-            var l = layers[i]; if (!(l instanceof AVLayer) || !(l.source instanceof CompItem)) continue;
-            var src = l.property("Marker"); var nestedComp = l.source; var dstNested = nestedComp.markerProperty;
-            for (var k = 1; k <= src.numKeys; k++) { dstNested.setValueAtTime(src.keyTime(k), src.keyValue(k)); }
-            if (isMove) { for (var m = src.numKeys; m >= 1; m--) src.removeKey(m); }
-        }
-        app.endUndoGroup();
+        runWithUndo("Layer→NestedComp Markers" + (isMove ? " (Move)":""), function () {
+            for (var i = 0; i < layers.length; i++) {
+                var l = layers[i]; if (!(l instanceof AVLayer) || !(l.source instanceof CompItem)) continue;
+                var src = l.property("Marker"); var nestedComp = l.source; var dstNested = nestedComp.markerProperty;
+                for (var k = 1; k <= src.numKeys; k++) { dstNested.setValueAtTime(src.keyTime(k), src.keyValue(k)); }
+                if (isMove) { for (var m = src.numKeys; m >= 1; m--) src.removeKey(m); }
+            }
+        });
     }
 
     var clipboardMarkers = { times: [], values: [] };
@@ -225,33 +252,40 @@
         var comp = getActiveComp(); if (!comp) { alertNoActiveComp(); return; }
         var layers = comp.selectedLayers; if (!layers || layers.length === 0) { alert("レイヤーが選択されていません"); return; }
         if (clipboardMarkers.times.length === 0) { alert("コピーされたマーカーがありません"); return; }
-        app.beginUndoGroup("Paste Markers to Layers");
-        for (var i = 0; i < layers.length; i++) {
-            var dst = layers[i].property("Marker"); for (var j = 0; j < clipboardMarkers.times.length; j++) {
-                var t = clipboardMarkers.times[j]; if (t < layers[i].inPoint || t > layers[i].outPoint) continue;
-                dst.setValueAtTime(t, clipboardMarkers.values[j]);
+        runWithUndo("Paste Markers to Layers", function () {
+            for (var i = 0; i < layers.length; i++) {
+                var dst = layers[i].property("Marker"); for (var j = 0; j < clipboardMarkers.times.length; j++) {
+                    var t = clipboardMarkers.times[j]; if (t < layers[i].inPoint || t > layers[i].outPoint) continue;
+                    dst.setValueAtTime(t, clipboardMarkers.values[j]);
+                }
             }
-        }
-        app.endUndoGroup(); alert("マーカーを貼り付けました");
+        });
+        alert("マーカーを貼り付けました");
     }
 
     function pasteMarkersToActiveComp() {
         var comp = getActiveComp(); if (!comp) { alertNoActiveComp(); return; }
         if (clipboardMarkers.times.length === 0) { alert("コピーされたマーカーがありません"); return; }
-        app.beginUndoGroup("Paste Markers to Comp");
-        var dst = comp.markerProperty; for (var j = 0; j < clipboardMarkers.times.length; j++) { dst.setValueAtTime(clipboardMarkers.times[j], clipboardMarkers.values[j]); }
-        app.endUndoGroup(); alert("マーカーを貼り付けました");
+        runWithUndo("Paste Markers to Comp", function () {
+            var dst = comp.markerProperty; for (var j = 0; j < clipboardMarkers.times.length; j++) { dst.setValueAtTime(clipboardMarkers.times[j], clipboardMarkers.values[j]); }
+        });
+        alert("マーカーを貼り付けました");
     }
 
     function deleteMarkersOnSelectedLayers() {
         var comp = getActiveComp(); if (!comp) { alertNoActiveComp(); return; }
         var layers = comp.selectedLayers; if (!layers || layers.length === 0) { alert("レイヤーが選択されていません"); return; }
-        app.beginUndoGroup("Delete Layer Markers"); for (var i = 0; i < layers.length; i++) { var m = layers[i].property("Marker"); for (var k = m.numKeys; k >= 1; k--) m.removeKey(k); } app.endUndoGroup();
+        runWithUndo("Delete Layer Markers", function () {
+            for (var i = 0; i < layers.length; i++) { var m = layers[i].property("Marker"); for (var k = m.numKeys; k >= 1; k--) m.removeKey(k); }
+        });
     }
 
     function deleteMarkersOnActiveComp() {
         var comp = getActiveComp(); if (!comp) { alertNoActiveComp(); return; }
-        var m = comp.markerProperty; if (m.numKeys === 0) return; app.beginUndoGroup("Delete Comp Markers"); for (var k = m.numKeys; k >= 1; k--) m.removeKey(k); app.endUndoGroup();
+        var m = comp.markerProperty; if (m.numKeys === 0) return;
+        runWithUndo("Delete Comp Markers", function () {
+            for (var k = m.numKeys; k >= 1; k--) m.removeKey(k);
+        });
     }
 
     /* ---------------------------------------------- EVENT BINDINGS */

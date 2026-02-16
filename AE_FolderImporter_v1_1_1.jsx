@@ -3,8 +3,21 @@
 // 既存フォルダ/既存フッテージを再利用して重複インポートしない版
 // -------------------------------------------------------------
 (function () {
+    var GLOBAL_KEY = "__AE_FolderImporter_v1_1_1_UI__";
+    if (!($.global[GLOBAL_KEY] === undefined || $.global[GLOBAL_KEY] === null)) {
+        try {
+            $.global[GLOBAL_KEY].show();
+            $.global[GLOBAL_KEY].active = true;
+        } catch (_reuseErr) {}
+        return;
+    }
+
     // ---------- UI ----------
     var win = new Window("palette", "フォルダ素材読み込み (v1.1.1, no-dup)", undefined, {resizeable:true});
+    $.global[GLOBAL_KEY] = win;
+    win.onClose = function () {
+        try { $.global[GLOBAL_KEY] = null; } catch (_closeErr) {}
+    };
     win.orientation = "column";
     win.alignChildren = "fill";
 
@@ -57,13 +70,11 @@
             if (ana.isLeaf && packSingleSeq && ana.isSingleSeq){
                 importSeq(ana.seq, topParent);
                 alert("読み込み完了（単独連番を直上にまとめて読み込み）");
-                app.endUndoGroup();
                 return;
             }
             if (ana.isLeaf && packSingleStill && ana.isSingleStill){
                 importFile(ana.still, topParent);
                 alert("読み込み完了（単独静止画を直上にまとめて読み込み）");
-                app.endUndoGroup();
                 return;
             }
 
@@ -80,8 +91,9 @@
             alert("読み込み完了");
         }catch(e){
             alert("読み込み中にエラー: " + e);
+        } finally {
+            app.endUndoGroup();
         }
-        app.endUndoGroup();
     };
 
     // ---------- Helpers ----------
