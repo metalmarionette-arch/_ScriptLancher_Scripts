@@ -12,6 +12,8 @@
 
 (function RatioRectMaker(thisObj) {
 
+    var GLOBAL_KEY = "__AE_RectGen_v1_0_5_UI__";
+
     // -----------------------------
     // Utilities
     // -----------------------------
@@ -756,16 +758,17 @@
             var ref = getInsertionLayer(comp);
 
             app.beginUndoGroup("Create Ratio Rect");
+            try {
+                var newLayer = rbShape.value ? createShapeRect(comp, w, h, layerName) : createSolidRect(comp, w, h, layerName);
 
-            var newLayer = rbShape.value ? createShapeRect(comp, w, h, layerName) : createSolidRect(comp, w, h, layerName);
+                if (ref) newLayer.moveAfter(ref);
+                else newLayer.moveToBeginning();
 
-            if (ref) newLayer.moveAfter(ref);
-            else newLayer.moveToBeginning();
-
-            for (var i = 1; i <= comp.numLayers; i++) comp.layer(i).selected = false;
-            newLayer.selected = true;
-
-            app.endUndoGroup();
+                for (var i = 1; i <= comp.numLayers; i++) comp.layer(i).selected = false;
+                newLayer.selected = true;
+            } finally {
+                app.endUndoGroup();
+            }
         }
 
         function makeGuide() {
@@ -789,16 +792,17 @@
             var ref = getInsertionLayer(comp);
 
             app.beginUndoGroup("Create Ratio Guide");
+            try {
+                var guideLayer = createMetallicGuideLayer(comp, baseW, baseH, target.center, guideTypeText, fitModeText, anchorText);
 
-            var guideLayer = createMetallicGuideLayer(comp, baseW, baseH, target.center, guideTypeText, fitModeText, anchorText);
+                if (ref) guideLayer.moveAfter(ref);
+                else guideLayer.moveToBeginning();
 
-            if (ref) guideLayer.moveAfter(ref);
-            else guideLayer.moveToBeginning();
-
-            for (var i = 1; i <= comp.numLayers; i++) comp.layer(i).selected = false;
-            guideLayer.selected = true;
-
-            app.endUndoGroup();
+                for (var i = 1; i <= comp.numLayers; i++) comp.layer(i).selected = false;
+                guideLayer.selected = true;
+            } finally {
+                app.endUndoGroup();
+            }
         }
 
         function updateSelectedRectShapes() {
@@ -813,20 +817,21 @@
             var h = clampMinInt(dd.selection.data.h, 2);
 
             app.beginUndoGroup("Update Rect Shape Size");
-
             var updated = 0;
-            for (var i = 0; i < sel.length; i++) {
-                var lyr = sel[i];
-                if (!lyr || lyr.matchName !== "ADBE Vector Layer") continue;
+            try {
+                for (var i = 0; i < sel.length; i++) {
+                    var lyr = sel[i];
+                    if (!lyr || lyr.matchName !== "ADBE Vector Layer") continue;
 
-                var contents = lyr.property("Contents");
-                if (!contents) continue;
+                    var contents = lyr.property("Contents");
+                    if (!contents) continue;
 
-                var sizeProp = findFirstRectSizeProp(contents);
-                if (sizeProp) { sizeProp.setValue([w, h]); updated++; }
+                    var sizeProp = findFirstRectSizeProp(contents);
+                    if (sizeProp) { sizeProp.setValue([w, h]); updated++; }
+                }
+            } finally {
+                app.endUndoGroup();
             }
-
-            app.endUndoGroup();
 
             if (updated === 0) alert("選択の中に「矩形パスを持つシェイプレイヤー」が見つかりませんでした。");
         }
@@ -856,7 +861,24 @@
 
         return win;
     }
+    if (!(thisObj instanceof Panel)) {
+        if (!($.global[GLOBAL_KEY] === undefined || $.global[GLOBAL_KEY] === null)) {
+            try {
+                $.global[GLOBAL_KEY].show();
+                $.global[GLOBAL_KEY].active = true;
+            } catch (_reuseErr) {}
+            return;
+        }
+    }
+
     var myUI = buildUI(thisObj);
-    if (myUI instanceof Window) { myUI.center(); myUI.show(); }
+    if (myUI instanceof Window) {
+        $.global[GLOBAL_KEY] = myUI;
+        myUI.onClose = function () {
+            try { $.global[GLOBAL_KEY] = null; } catch (_closeErr) {}
+        };
+        myUI.center();
+        myUI.show();
+    }
 
 })(this);

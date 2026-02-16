@@ -7,6 +7,7 @@
 */
 (function ShapeSyncStyle(thisObj) {
     var SCRIPT_NAME = "ShapeSync";
+    var GLOBAL_KEY = "__AE_ShapeSync_v1_0_3_UI__";
 
     // ----------------------------
     // State
@@ -733,8 +734,22 @@
     // ----------------------------
     // Boot
     // ----------------------------
+    if (!(thisObj instanceof Panel)) {
+        if (!($.global[GLOBAL_KEY] === undefined || $.global[GLOBAL_KEY] === null)) {
+            try {
+                $.global[GLOBAL_KEY].show();
+                $.global[GLOBAL_KEY].active = true;
+            } catch (_reuseErr) {}
+            return;
+        }
+    }
+
     var pal = buildUI(thisObj);
     if (pal instanceof Window) {
+        $.global[GLOBAL_KEY] = pal;
+        pal.onClose = function () {
+            try { $.global[GLOBAL_KEY] = null; } catch (_closeErr) {}
+        };
         pal.center();
         pal.show();
     } else {

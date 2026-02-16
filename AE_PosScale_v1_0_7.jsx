@@ -14,6 +14,17 @@
 (function PosScaleUI(thisObj) {
 
     var SCRIPT_NAME = "PosScale";
+    var GLOBAL_KEY = "__AE_PosScale_v1_0_7_UI__";
+
+    if (!(thisObj instanceof Panel)) {
+        if (!($.global[GLOBAL_KEY] === undefined || $.global[GLOBAL_KEY] === null)) {
+            try {
+                $.global[GLOBAL_KEY].show();
+                $.global[GLOBAL_KEY].active = true;
+            } catch (_reuseErr) {}
+            return;
+        }
+    }
 
     // ---------------- Utils ----------------
     function isCompItem(item) { return item && (item instanceof CompItem); }
@@ -576,6 +587,13 @@ function applyScaleAtCurrentTime(layer, time, factor, mode) {
         ? thisObj
         : new Window("palette", SCRIPT_NAME, undefined, { resizeable: true });
 
+    if (win instanceof Window) {
+        $.global[GLOBAL_KEY] = win;
+        win.onClose = function () {
+            try { $.global[GLOBAL_KEY] = null; } catch (_closeErr) {}
+        };
+    }
+
     win.alignChildren = ["fill", "top"];
 
     var state = {
@@ -831,8 +849,8 @@ function applyScaleAtCurrentTime(layer, time, factor, mode) {
         var t = comp.time;
 
         app.beginUndoGroup(SCRIPT_NAME);
-
-        var failed = [];
+        try {
+            var failed = [];
 
         // 字送り風（均等間隔）：Positionはレイヤー群をまとめて再配置（X/Y/角度のみ）
         if ((state.applyTarget === "POS" || state.applyTarget === "BOTH") &&
@@ -876,24 +894,26 @@ function applyScaleAtCurrentTime(layer, time, factor, mode) {
                 }
             }
         }
-app.endUndoGroup();
 
-        // 完了ポップアップは出さない（要求により）
-        // ただし、失敗があればエラー内容だけ通知
-        if (failed.length > 0) {
-            var msg = "適用できなかったレイヤーがあります。\n";
-            var showN = Math.min(10, failed.length);
-            for (var j = 0; j < showN; j++) {
-                var rr = failed[j].res;
-                var kind = failed[j].kind ? (failed[j].kind + " ") : "";
-                var reason = (rr && rr.reason) ? rr.reason : "unknown";
-                var err = (rr && rr.error) ? (" / " + rr.error) : "";
-                msg += "- " + safeName(failed[j].layer) + " : " + kind + reason + err + "\n";
+            // 完了ポップアップは出さない（要求により）
+            // ただし、失敗があればエラー内容だけ通知
+            if (failed.length > 0) {
+                var msg = "適用できなかったレイヤーがあります。\n";
+                var showN = Math.min(10, failed.length);
+                for (var j = 0; j < showN; j++) {
+                    var rr = failed[j].res;
+                    var kind = failed[j].kind ? (failed[j].kind + " ") : "";
+                    var reason = (rr && rr.reason) ? rr.reason : "unknown";
+                    var err = (rr && rr.error) ? (" / " + rr.error) : "";
+                    msg += "- " + safeName(failed[j].layer) + " : " + kind + reason + err + "\n";
+                }
+                if (failed.length > showN) {
+                    msg += "... (" + failed.length + "件)\n";
+                }
+                alertErr(msg);
             }
-            if (failed.length > showN) {
-                msg += "... (" + failed.length + "件)\n";
-            }
-            alertErr(msg);
+        } finally {
+            app.endUndoGroup();
         }
     };
 
