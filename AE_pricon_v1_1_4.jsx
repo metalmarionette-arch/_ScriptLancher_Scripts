@@ -8,6 +8,8 @@
 
 (function (thisObj) {
 
+    var GLOBAL_UI_KEY = "__AE_pricon_v1_1_4_ui__";
+
     // -------------------------------
     // Utils
     // -------------------------------
@@ -96,37 +98,23 @@
         return null;
     }
 
-    function normalizePrecompStartToZero(precomp) {
+    function normalizePrecompToSelectedRange(precomp, selectedMinIn, selectedMaxOut) {
         if (!precomp) return;
         ensurePositiveDuration(precomp);
 
-        // すべてのレイヤーの最小inPointを探し、それを0に揃える（見え方維持）
-        var minIn = 1e10;
-        for (var i = 1; i <= precomp.numLayers; i++) {
-            var l = precomp.layer(i);
-            if (!l) continue;
-            if (l.inPoint < minIn) minIn = l.inPoint;
-        }
-        if (minIn === 1e10) minIn = 0;
-
-        // minIn を0にするように全レイヤーのstartTimeをシフト
-        if (minIn !== 0) {
-            for (var j = 1; j <= precomp.numLayers; j++) {
-                var l2 = precomp.layer(j);
-                if (!l2) continue;
-                shiftLayerTimeSafe(l2, -minIn);
+        // 選択レイヤーの最小inを0へ合わせる（トラックマット等の相対関係は保持）
+        if (selectedMinIn !== 0) {
+            for (var i = 1; i <= precomp.numLayers; i++) {
+                var l = precomp.layer(i);
+                if (!l) continue;
+                shiftLayerTimeSafe(l, -selectedMinIn);
             }
         }
 
-        // プリコンの尺をレイヤーの最大outに合わせて調整
-        var maxOut = 0;
-        for (var k = 1; k <= precomp.numLayers; k++) {
-            var l3 = precomp.layer(k);
-            if (!l3) continue;
-            if (l3.outPoint > maxOut) maxOut = l3.outPoint;
-        }
-        if (maxOut <= 0) maxOut = precomp.frameDuration;
-        setCompDurationAndWorkArea(precomp, maxOut);
+        // プリコン尺は「選択レイヤーの尺」のみで確定
+        var selectedDuration = selectedMaxOut - selectedMinIn;
+        if (selectedDuration <= 0) selectedDuration = precomp.frameDuration;
+        setCompDurationAndWorkArea(precomp, selectedDuration);
     }
 
     function placeAndTrimPrecompLayer(parentComp, precompItem, parentStartSec) {
@@ -192,8 +180,9 @@
                 var targetLayer = comp.layer(idx);
                 if (!targetLayer) continue;
 
-                // 親コンポ上の開始位置（inPoint）
-                var parentStart = targetLayer.inPoint;
+                // 選択レイヤーの尺（トラックマットは含めない）
+                var selectedMinIn = targetLayer.inPoint;
+                var selectedMaxOut = targetLayer.outPoint;
 
                 var coreName = (prefix + targetLayer.name + suffix);
                 var compName = addNumberHead
@@ -202,22 +191,24 @@
 
                 var precomp = comp.layers.precompose([idx], compName, true);
 
-                // 単体：必ず0フレーム開始に揃える
-                normalizePrecompStartToZero(precomp);
+                // 単体：選択レイヤー尺を基準に0開始＆尺確定
+                normalizePrecompToSelectedRange(precomp, selectedMinIn, selectedMaxOut);
 
-                // 親コンポ側：元の場所に置き、プリコン尺に合わせてトリム
-                placeAndTrimPrecompLayer(comp, precomp, parentStart);
+                // 親コンポ側：選択レイヤーの元位置に置き、プリコン尺でトリム
+                placeAndTrimPrecompLayer(comp, precomp, selectedMinIn);
             }
 
         } else {
             // 選択レイヤーをまとめて1つ
             var indicesAll = [];
             var minInAll = 1e10;
+            var maxOutAll = -1e10;
 
             for (var s = 0; s < sel.length; s++) {
                 var lay = sel[s];
                 indicesAll.push(lay.index);
                 if (lay.inPoint < minInAll) minInAll = lay.inPoint;
+                if (lay.outPoint > maxOutAll) maxOutAll = lay.outPoint;
             }
 
             indicesAll.sort(function (a, b) { return a - b; });
@@ -230,10 +221,10 @@
 
             var precompAll = comp.layers.precompose(indicesAll, compNameAll, true);
 
-            // 相対関係を維持したまま最小inPointを0に揃える
-            normalizePrecompStartToZero(precompAll);
+            // 相対関係を維持しつつ、選択レイヤー尺で0開始＆尺確定
+            normalizePrecompToSelectedRange(precompAll, minInAll, maxOutAll);
 
-            // 親コンポ側：元の最小in位置に置き、プリコン尺に合わせてトリム
+            // 親コンポ側：元の最小in位置に置き、選択レイヤー尺でトリム
             placeAndTrimPrecompLayer(comp, precompAll, minInAll);
         }
     }
@@ -241,6 +232,28 @@
     // -------------------------------
     // UI
     // -------------------------------
+    function bringWindowToFront(win) {
+        if (!(win instanceof Window)) return;
+        try { win.show(); } catch (e1) {}
+        try { win.active = true; } catch (e2) {}
+    }
+
+    function getSingletonWindow() {
+        var g = $.global;
+        if (!g) return null;
+        var existing = g[GLOBAL_UI_KEY];
+        if (!(existing instanceof Window)) return null;
+
+        // 既に閉じられている参照を掃除
+        try {
+            var _ = existing.visible;
+        } catch (e) {
+            g[GLOBAL_UI_KEY] = null;
+            return null;
+        }
+        return existing;
+    }
+
     function buildUI(thisObj) {
         var win = (thisObj instanceof Panel)
             ? thisObj
@@ -317,6 +330,14 @@
             if (win instanceof Window) win.close();
         };
 
+        if (win instanceof Window) {
+            win.onClose = function () {
+                if ($.global && $.global[GLOBAL_UI_KEY] === win) {
+                    $.global[GLOBAL_UI_KEY] = null;
+                }
+            };
+        }
+
         win.onResizing = win.onResize = function () {
             try { this.layout.resize(); } catch (e) {}
         };
@@ -324,8 +345,17 @@
         return win;
     }
 
+    if (!(thisObj instanceof Panel)) {
+        var existingWin = getSingletonWindow();
+        if (existingWin) {
+            bringWindowToFront(existingWin);
+            return;
+        }
+    }
+
     var ui = buildUI(thisObj);
     if (ui instanceof Window) {
+        $.global[GLOBAL_UI_KEY] = ui;
         ui.center();
         ui.show();
     } else {
