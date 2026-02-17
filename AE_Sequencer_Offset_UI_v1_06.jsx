@@ -10,6 +10,15 @@
 #target aftereffects
 
 (function () {
+    var GLOBAL_KEY = "__AE_Sequencer_Offset_UI_v1_06__";
+    if (!($.global[GLOBAL_KEY] === undefined || $.global[GLOBAL_KEY] === null)) {
+        try {
+            $.global[GLOBAL_KEY].show();
+            $.global[GLOBAL_KEY].active = true;
+        } catch (_reuseErr) {}
+        return;
+    }
+
     // --- 画像読み込み（スクリプト隣の AE_Sequencer_png） ---
     function loadIcon(filename) {
         try {
@@ -29,6 +38,10 @@
 
     // --- UI ---
     var win = new Window("palette", "Sequencer Offset", undefined, { resizeable: false });
+    $.global[GLOBAL_KEY] = win;
+    win.onClose = function () {
+        try { $.global[GLOBAL_KEY] = null; } catch (_closeErr) {}
+    };
     win.orientation = "column";
     win.margins = 10;
     win.alignChildren = ["fill", "top"];

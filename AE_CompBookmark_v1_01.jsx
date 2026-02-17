@@ -1,5 +1,6 @@
 ﻿﻿(function (thisObj) {
     var SCRIPT_NAME = "Favorite Footages Placer";
+    var GLOBAL_KEY = "__AE_CompBookmark_v1_01_UI__";
 
     // ===============================
     // 設定保存用キー
@@ -463,12 +464,11 @@
 
                 // ジャンプ対象だけを選択状態に
                 projItem.selected = true;
-
-                app.endUndoGroup();
             } catch (e) {
                 // ★ ここでも同じメッセージに統一
                 alert("この登録アイテムはすでにプロジェクトから削除されている可能性があります。", SCRIPT_NAME);
-                try { app.endUndoGroup(); } catch (e2) {}
+            } finally {
+                app.endUndoGroup();
             }
         }
 
@@ -570,9 +570,23 @@
         return pal;
     }
 
+    if (!(thisObj instanceof Panel)) {
+        if (!($.global[GLOBAL_KEY] === undefined || $.global[GLOBAL_KEY] === null)) {
+            try {
+                $.global[GLOBAL_KEY].show();
+                $.global[GLOBAL_KEY].active = true;
+            } catch (_reuseErr) {}
+            return;
+        }
+    }
+
     var myPal = buildUI(thisObj);
 
     if (myPal && myPal instanceof Window) {
+        $.global[GLOBAL_KEY] = myPal;
+        myPal.onClose = function () {
+            try { $.global[GLOBAL_KEY] = null; } catch (_closeErr) {}
+        };
         myPal.center();
         myPal.show();
     }

@@ -6,7 +6,20 @@
 //  - これにより、新側ルートのキー構成（"bg_a_image"）とのミスマッチを解消
 //  - 既存のトークン置換（AAA_mdl17→AAA_mdl20、mdl17→mdl20）と名前キー照合は従来通り
 (function () {
+    var GLOBAL_KEY = "__AE_FootageReplacer_v1_1_3_UI__";
+    if (!($.global[GLOBAL_KEY] === undefined || $.global[GLOBAL_KEY] === null)) {
+        try {
+            $.global[GLOBAL_KEY].show();
+            $.global[GLOBAL_KEY].active = true;
+        } catch (_reuseErr) {}
+        return;
+    }
+
     var win = new Window("palette", "素材一括置き換え (v1.1.3)", undefined, {resizeable:true});
+    $.global[GLOBAL_KEY] = win;
+    win.onClose = function () {
+        try { $.global[GLOBAL_KEY] = null; } catch (_closeErr) {}
+    };
     win.orientation = "column"; win.alignChildren = "fill";
 
     var pRep = win.add("panel", undefined, "置き換え（プロジェクトで“旧素材ルートAEフォルダ”を1つ選択）");
@@ -62,7 +75,7 @@
             var msg = replaceAllUnderFolder(sel[0], new Folder(newRoot), cUseFolder.value, cUseName.value, pathOpt);
             alert(msg);
         }catch(e){ alert("置き換え中にエラー: " + e); }
-        app.endUndoGroup();
+        finally { app.endUndoGroup(); }
     };
 
     function replaceAllUnderFolder(targetAEFolder, newRootFolder, useFolderKey, useNameKey, pathOpt){

@@ -19,6 +19,17 @@
 
 (function FontSizeByCharType(thisObj) {
     var SCRIPT_NAME = "CharType FontSize";
+    var GLOBAL_KEY = "__AE_reSizeFont_v1_0_4_UI__";
+
+    if (!(thisObj instanceof Panel)) {
+        if (!($.global[GLOBAL_KEY] === undefined || $.global[GLOBAL_KEY] === null)) {
+            try {
+                $.global[GLOBAL_KEY].show();
+                $.global[GLOBAL_KEY].active = true;
+            } catch (_reuseErr) {}
+            return;
+        }
+    }
 
     function clamp(v, mn, mx) {
         return Math.max(mn, Math.min(mx, v));
@@ -157,6 +168,13 @@
         var pal = (thisObj instanceof Panel)
             ? thisObj
             : new Window("palette", SCRIPT_NAME, undefined, { resizeable: true });
+
+        if (pal instanceof Window) {
+            $.global[GLOBAL_KEY] = pal;
+            pal.onClose = function () {
+                try { $.global[GLOBAL_KEY] = null; } catch (_closeErr) {}
+            };
+        }
 
         pal.orientation = "column";
         pal.alignChildren = ["fill", "top"];
@@ -334,12 +352,12 @@
             }
 
             app.beginUndoGroup(isScaleMode ? "CharType FontSize Scale" : "CharType FontSize Absolute");
-
-            var needUpdate = false;
-            for (var i = 0; i < layers.length; i++) {
-                var lyr = layers[i];
-                var textProp = lyr.property("Source Text");
-                if (!textProp) continue;
+            try {
+                var needUpdate = false;
+                for (var i = 0; i < layers.length; i++) {
+                    var lyr = layers[i];
+                    var textProp = lyr.property("Source Text");
+                    if (!textProp) continue;
 
                 // AE 24.3+ かチェック
                 var probe = textProp.value;
@@ -369,8 +387,9 @@
                     }
                 }
             }
-
-            app.endUndoGroup();
+            } finally {
+                app.endUndoGroup();
+            }
             // 成功ポップアップは出しません（必要なら入れ替え可能）
         };
 

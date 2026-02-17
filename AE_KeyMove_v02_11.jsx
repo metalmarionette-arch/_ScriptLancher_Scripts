@@ -9,6 +9,7 @@
 
 // グローバルUI変数 (KOT_buildUI から返されるオブジェクトを格納)
 var ui;
+var KOT_GLOBAL_UI_KEY = "__AE_KeyMove_v02_11_UI__";
 
 function cloneEase(e) {
     if (e instanceof Array) {
@@ -254,7 +255,7 @@ function KOT_executeUnifiedOperation(direction) {
                 }
             }
         } else {
-             app.endUndoGroup(); return;
+             return;
         }
 
         if (ui.moveRadio.value) {
@@ -724,28 +725,31 @@ function KOT_roundKeyframePositions() {
     var data = KOT_getKeyData();
     if (!data) return;
     app.beginUndoGroup("キーのフレーム位置を整数に");
-    var newKeys = [];
-    for (var i = 0; i < data.overall.keys.length; i++) {
-         var keyItem = data.overall.keys[i];
-         // ▼▼▼▼▼ 修正済み箇所 ▼▼▼▼▼
-         var newKey = {
-            property: keyItem.property,
-            time: keyItem.key.time,
-            value: keyItem.key.value,
-            easeIn: cloneEase(keyItem.key.easeIn),
-            easeOut: cloneEase(keyItem.key.easeOut),
-            interpolationIn: keyItem.key.interpolationIn,
-            interpolationOut: keyItem.key.interpolationOut,
-            continuous: keyItem.key.continuous,
-            autoBezier: keyItem.key.autoBezier
-        };
-        // ▲▲▲▲▲ 修正済みここまで ▲▲▲▲▲
-         newKey.time = Math.round(newKey.time * data.comp.frameRate) / data.comp.frameRate;
-         newKeys.push(newKey);
+    try {
+        var newKeys = [];
+        for (var i = 0; i < data.overall.keys.length; i++) {
+             var keyItem = data.overall.keys[i];
+             // ▼▼▼▼▼ 修正済み箇所 ▼▼▼▼▼
+             var newKey = {
+                property: keyItem.property,
+                time: keyItem.key.time,
+                value: keyItem.key.value,
+                easeIn: cloneEase(keyItem.key.easeIn),
+                easeOut: cloneEase(keyItem.key.easeOut),
+                interpolationIn: keyItem.key.interpolationIn,
+                interpolationOut: keyItem.key.interpolationOut,
+                continuous: keyItem.key.continuous,
+                autoBezier: keyItem.key.autoBezier
+            };
+            // ▲▲▲▲▲ 修正済みここまで ▲▲▲▲▲
+             newKey.time = Math.round(newKey.time * data.comp.frameRate) / data.comp.frameRate;
+             newKeys.push(newKey);
+        }
+        var reselectMap = KOT_regenerateKeys(data.overall.keys, newKeys);
+        KOT_applyReselectMap(reselectMap);
+    } finally {
+        app.endUndoGroup();
     }
-    var reselectMap = KOT_regenerateKeys(data.overall.keys, newKeys);
-    KOT_applyReselectMap(reselectMap);
-    app.endUndoGroup();
 }
 
 // タイムリマップと不透明度の値を有効範囲に丸める（クランプする）汎用関数
@@ -802,5 +806,23 @@ function KOT_getAverageSelectedKeyValue() {
 }
 
 // 初期化
-ui = KOT_buildUI(this);
-if (ui.panel && ui.panel instanceof Window) { ui.panel.center(); ui.panel.show(); }
+if (!(this instanceof Panel)) {
+    if (!($.global[KOT_GLOBAL_UI_KEY] === undefined || $.global[KOT_GLOBAL_UI_KEY] === null)) {
+        try {
+            $.global[KOT_GLOBAL_UI_KEY].show();
+            $.global[KOT_GLOBAL_UI_KEY].active = true;
+        } catch (_reuseErr) {}
+    } else {
+        ui = KOT_buildUI(this);
+        if (ui.panel && ui.panel instanceof Window) {
+            $.global[KOT_GLOBAL_UI_KEY] = ui.panel;
+            ui.panel.onClose = function () {
+                try { $.global[KOT_GLOBAL_UI_KEY] = null; } catch (_closeErr) {}
+            };
+            ui.panel.center();
+            ui.panel.show();
+        }
+    }
+} else {
+    ui = KOT_buildUI(this);
+}

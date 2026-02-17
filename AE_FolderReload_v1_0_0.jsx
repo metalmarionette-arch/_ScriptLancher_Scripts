@@ -2,8 +2,21 @@
 // 選択したAEフォルダ配下のフッテージ一括再読み込み専用
 // -------------------------------------------------------------
 (function () {
+    var GLOBAL_KEY = "__AE_FolderReload_v1_0_0_UI__";
+    if (!($.global[GLOBAL_KEY] === undefined || $.global[GLOBAL_KEY] === null)) {
+        try {
+            $.global[GLOBAL_KEY].show();
+            $.global[GLOBAL_KEY].active = true;
+        } catch (_reuseErr) {}
+        return;
+    }
+
     // ---------- UI ----------
     var win = new Window("palette", "フッテージ一括再読み込み (v1.0.0)", undefined, {resizeable:true});
+    $.global[GLOBAL_KEY] = win;
+    win.onClose = function () {
+        try { $.global[GLOBAL_KEY] = null; } catch (_closeErr) {}
+    };
     win.orientation = "column";
     win.alignChildren = "fill";
 
@@ -34,8 +47,9 @@
             alert(msg);
         } catch (e) {
             alert("再読み込み中にエラー: " + e);
+        } finally {
+            app.endUndoGroup();
         }
-        app.endUndoGroup();
     };
 
     // ---------- Helpers ----------
