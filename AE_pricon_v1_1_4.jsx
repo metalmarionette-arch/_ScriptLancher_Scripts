@@ -8,6 +8,8 @@
 
 (function (thisObj) {
 
+    var GLOBAL_UI_KEY = "__AE_pricon_v1_1_4_ui__";
+
     // -------------------------------
     // Utils
     // -------------------------------
@@ -241,6 +243,28 @@
     // -------------------------------
     // UI
     // -------------------------------
+    function bringWindowToFront(win) {
+        if (!(win instanceof Window)) return;
+        try { win.show(); } catch (e1) {}
+        try { win.active = true; } catch (e2) {}
+    }
+
+    function getSingletonWindow() {
+        var g = $.global;
+        if (!g) return null;
+        var existing = g[GLOBAL_UI_KEY];
+        if (!(existing instanceof Window)) return null;
+
+        // 既に閉じられている参照を掃除
+        try {
+            var _ = existing.visible;
+        } catch (e) {
+            g[GLOBAL_UI_KEY] = null;
+            return null;
+        }
+        return existing;
+    }
+
     function buildUI(thisObj) {
         var win = (thisObj instanceof Panel)
             ? thisObj
@@ -317,6 +341,14 @@
             if (win instanceof Window) win.close();
         };
 
+        if (win instanceof Window) {
+            win.onClose = function () {
+                if ($.global && $.global[GLOBAL_UI_KEY] === win) {
+                    $.global[GLOBAL_UI_KEY] = null;
+                }
+            };
+        }
+
         win.onResizing = win.onResize = function () {
             try { this.layout.resize(); } catch (e) {}
         };
@@ -324,8 +356,17 @@
         return win;
     }
 
+    if (!(thisObj instanceof Panel)) {
+        var existingWin = getSingletonWindow();
+        if (existingWin) {
+            bringWindowToFront(existingWin);
+            return;
+        }
+    }
+
     var ui = buildUI(thisObj);
     if (ui instanceof Window) {
+        $.global[GLOBAL_UI_KEY] = ui;
         ui.center();
         ui.show();
     } else {
