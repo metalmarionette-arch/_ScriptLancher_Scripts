@@ -8,6 +8,7 @@
 (function AnimPropSelect(thisObj) {
 
     var SCRIPT_NAME = "AnimProp Select";
+    var GLOBAL_KEY = "__AE_AnimSelect_v1_0_11_UI__";
 
     var state = {
         includeKeys: true,
@@ -682,6 +683,7 @@
         if (!state.comp || state.layers.length === 0) return;
 
         app.beginUndoGroup(SCRIPT_NAME);
+        try {
 
         // 選択の初期化（既存選択をクリア）
         if (state.doSelectProps && state.clearBeforeSelect) {
@@ -702,7 +704,6 @@
         }
 
         if (targets.length === 0) {
-            app.endUndoGroup();
             alert(
                 "対象が見つかりませんでした。\n\n" +
                 "確認ポイント：\n" +
@@ -789,7 +790,9 @@
             state.lastRevealFamily = newFamily;
         }
 
-        app.endUndoGroup();
+        } finally {
+            app.endUndoGroup();
+        }
     }
 
     // ---------- UI ----------
@@ -957,8 +960,22 @@
     }
 
 
+    if (!(thisObj instanceof Panel)) {
+        if (!($.global[GLOBAL_KEY] === undefined || $.global[GLOBAL_KEY] === null)) {
+            try {
+                $.global[GLOBAL_KEY].show();
+                $.global[GLOBAL_KEY].active = true;
+            } catch (_reuseErr) {}
+            return;
+        }
+    }
+
     var ui = buildUI(thisObj);
     if (ui instanceof Window) {
+        $.global[GLOBAL_KEY] = ui;
+        ui.onClose = function () {
+            try { $.global[GLOBAL_KEY] = null; } catch (_closeErr) {}
+        };
         ui.center();
         ui.show();
     }
